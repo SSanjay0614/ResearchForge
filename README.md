@@ -162,6 +162,4 @@ streamlit run frontend/app.py
 B.Tech Computer Science and Engineering  
 VIT Chennai
 
-Interested in **Agentic AI, Multi-Agent Systems, Healthcare AI, and Research Automation**.
-
 ---

@@ -2,18 +2,24 @@ from agents.base_agent import BaseAgent
 
 from memory.state import ProjectState
 
-from config.prompts import MANUSCRIPT_SYSTEM_PROMPT
+from config.prompts import (
+    MANUSCRIPT_SYSTEM_PROMPT,
+    MANUSCRIPT_ACTION_PROMPT,
+    MANUSCRIPT_CRITIQUE_PROMPT,
+    MANUSCRIPT_INSTRUCTIONS_PROMPT,
+    MANUSCRIPT_REVISION_PROMPT,
+)
 
 from models.manuscript_action import ManuscriptAction
-
-from config.prompts import MANUSCRIPT_ACTION_PROMPT
-
-from models.manuscript_action import ManuscriptAction
+from models.chat_message import ChatMessage
+from models.workflow_event import WorkflowEvent
 
 from utils.parser import parse_json
 
-class ManuscriptAgent(BaseAgent):
+MAX_GENERATION_ITERATIONS = 2
 
+
+class ManuscriptAgent(BaseAgent):
 
     def __init__(self):
 
@@ -48,37 +54,43 @@ class ManuscriptAgent(BaseAgent):
             **data
         )
         
-    def _build_manuscript_context(
+    def _build_context(
         self,
-        state: ProjectState
+        state: ProjectState,
+        target_section: str = ""
     ) -> str:
 
-        sections = []
+        objectives = "\n".join(
+            f"- {obj}"
+            for obj in state.objectives
+        ) or "None"
 
-        manuscript = state.manuscript
+        relevant_content = "None"
+        if target_section:
+            section_key = target_section.strip().lower()
+            manuscript = state.manuscript
+            field_val = getattr(manuscript, section_key, None)
+            if field_val:
+                relevant_content = f"{target_section}\n{field_val}"
+            elif manuscript.sections and section_key in manuscript.sections:
+                relevant_content = f"{target_section}\n{manuscript.sections[section_key]}"
 
-        if manuscript.title:
-            sections.append(f"Title\n{manuscript.title}")
+        return f"""
+        Topic:
+        {state.topic or "None"}
 
-        if manuscript.abstract:
-            sections.append(f"Abstract\n{manuscript.abstract}")
+        Objectives:
+        {objectives}
 
-        if manuscript.introduction:
-            sections.append(f"Introduction\n{manuscript.introduction}")
+        Literature Review:
+        {state.literature_review or "None"}
 
-        if manuscript.methodology:
-            sections.append(f"Methodology\n{manuscript.methodology}")
+        Research Gap:
+        {state.research_gap or "None"}
 
-        if manuscript.experiments:
-            sections.append(f"Experiments\n{manuscript.experiments}")
-
-        if manuscript.results:
-            sections.append(f"Results\n{manuscript.results}")
-
-        if manuscript.conclusion:
-            sections.append(f"Conclusion\n{manuscript.conclusion}")
-
-        return "\n\n".join(sections)
+        Relevant Manuscript Section:
+        {relevant_content}
+        """
         
     def _build_latex_source(
         self,
@@ -116,10 +128,6 @@ class ManuscriptAgent(BaseAgent):
         if manuscript.conclusion:
             sections.append(manuscript.conclusion)
 
-        # -----------------------------------------
-        # Custom Sections
-        # -----------------------------------------
-
         for section_name, content in manuscript.sections.items():
 
             if not content.strip():
@@ -136,36 +144,21 @@ class ManuscriptAgent(BaseAgent):
     def _build_prompt(
         self,
         state: ProjectState,
-        user_input: str
+        user_input: str,
+        action: ManuscriptAction = None
     ) -> str:
 
-        action = self._decide_action(
+        if action is None:
+            action = self._decide_action(state, user_input)
+
+        instructions = MANUSCRIPT_INSTRUCTIONS_PROMPT.format(
+            action=action.action,
+            section=action.section
+        )
+
+        context = self._build_context(
             state,
-            user_input
-        )
-
-        objectives = "\n".join(
-            f"- {obj}"
-            for obj in state.objectives
-        )
-        
-        instructions = f"""
-        Action:
-        {action.action}
-
-        Target Section:
-        {action.section}
-
-        Instructions:
-
-        - If action is "generate", create the section from scratch.
-        - If action is "rewrite", completely rewrite the existing section according to the user's request.
-        - If action is "improve", improve the existing section while preserving its meaning and structure.
-        - If action is "continue", continue writing from the existing section without repeating previous content.
-        """
-
-        manuscript = self._build_manuscript_context(
-            state
+            action.section
         )
 
         return f"""
@@ -173,31 +166,68 @@ class ManuscriptAgent(BaseAgent):
 
     {instructions}
 
-    Project Topic
+    Manuscript Context:
 
-    {state.topic}
+    {context}
 
-    Objectives
-
-    {objectives}
-
-    Literature Review
-
-    {state.literature_review}
-
-    Research Gap
-
-    {state.research_gap}
-
-    Existing Manuscript
-
-    {manuscript}
-
-    User Request
+    User Request:
 
     {user_input}
     """
-    
+
+    def _critique_section(
+        self,
+        state: ProjectState,
+        section_name: str,
+        latex_content: str,
+        user_input: str
+    ) -> dict:
+
+        context = self._build_context(state, section_name)
+
+        prompt = f"""
+        {MANUSCRIPT_CRITIQUE_PROMPT}
+
+        Manuscript Context:
+        {context}
+
+        Target Section:
+        {section_name}
+
+        Draft LaTeX Content:
+        {latex_content}
+
+        User Request:
+        {user_input}
+        """
+
+        try:
+            return self._invoke_llm(prompt)
+        except Exception:
+            return {"acceptable": True, "critique": "", "revision_instructions": ""}
+
+    def _build_revision_prompt(
+        self,
+        state: ProjectState,
+        action: ManuscriptAction,
+        initial_data: dict,
+        critique_info: dict,
+        user_input: str
+    ) -> str:
+
+        context = self._build_context(state, action.section)
+
+        return MANUSCRIPT_REVISION_PROMPT.format(
+            system_prompt=MANUSCRIPT_SYSTEM_PROMPT,
+            context=context,
+            action=action.action,
+            section=action.section,
+            initial_draft=initial_data.get("latex", ""),
+            critique=critique_info.get("critique", ""),
+            revision_instructions=critique_info.get("revision_instructions", ""),
+            user_input=user_input
+        )
+
     def _update_state(
         self,
         state: ProjectState,
@@ -208,9 +238,8 @@ class ManuscriptAgent(BaseAgent):
 
         state.status = "manuscript"
 
-        section = data["section"].strip()
-
-        latex = data["latex"]
+        section = data.get("section", "").strip()
+        latex = data.get("latex", "")
 
         section_key = section.lower()
 
@@ -241,7 +270,7 @@ class ManuscriptAgent(BaseAgent):
         elif section_key == "conclusion":
             state.manuscript.conclusion = latex
 
-        else:
+        elif section:
 
             state.manuscript.sections[
                 section
@@ -254,3 +283,104 @@ class ManuscriptAgent(BaseAgent):
         )
 
         return state
+
+    def run(
+        self,
+        state: ProjectState,
+        user_input: str
+    ):
+
+        self.logger.info(
+            f"{self.name} started. User Input: {user_input}"
+        )
+
+        action = self._decide_action(
+            state,
+            user_input
+        )
+
+        prompt = self._build_prompt(
+            state,
+            user_input,
+            action=action
+        )
+
+        data = self._invoke_llm(
+            prompt
+        )
+
+        section_name = data.get("section") or action.section or "Section"
+        latex_content = data.get("latex", "")
+
+        critique_info = self._critique_section(
+            state,
+            section_name,
+            latex_content,
+            user_input
+        )
+
+        if not critique_info.get("acceptable", True):
+
+            self.logger.info("manuscript critique failed")
+
+            revision_prompt = self._build_revision_prompt(
+                state,
+                action,
+                data,
+                critique_info,
+                user_input
+            )
+
+            try:
+                revised_data = self._invoke_llm(revision_prompt)
+                if revised_data.get("latex"):
+                    data = revised_data
+            except Exception as e:
+                self.logger.warning(f"Revision pass failed: {e}")
+
+        state = self._update_state(
+            state,
+            data
+        )
+
+        data["agent"] = self.name
+        state.last_response = data
+
+        state.chat_history.append(
+            ChatMessage(
+                role="user",
+                content=user_input
+            )
+        )
+
+        state.chat_history.append(
+            ChatMessage(
+                role="assistant",
+                agent=self.name,
+                content=data.get("response", "")
+            )
+        )
+
+        state.conversation_outputs.append(
+            {
+                "agent": self.name,
+                "response": data.get("response", ""),
+                "questions": data.get("questions", []),
+                "papers": data.get("papers", []),
+                "citations": data.get("citations", []),
+                "manuscript_revision": data.get("manuscript_revision", ""),
+            }
+        )
+
+        state.workflow_history.append(
+            WorkflowEvent(
+                agent=self.name,
+                action="Completed"
+            )
+        )
+
+        self.logger.info(
+            f"{self.name} finished."
+        )
+
+        return state, data

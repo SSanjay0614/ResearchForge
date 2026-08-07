@@ -8,6 +8,7 @@ from models.workflow_event import WorkflowEvent
 
 from utils.logger import logger
 from utils.parser import parse_json
+from config.prompts import INVALID_JSON_RETRY_PROMPT
 
 
 class BaseAgent(ABC):
@@ -117,18 +118,7 @@ class BaseAgent(ABC):
                         f"{self.name} | Attempt {attempt + 1} failed."
                     )
 
-                    current_prompt += """
-
-                    Your previous response was not valid JSON.
-
-                    Return ONLY a valid JSON object.
-
-                    Do not include explanations.
-
-                    Do not use Markdown.
-
-                    Return JSON only.
-                    """
+                    current_prompt += f"\n\n{INVALID_JSON_RETRY_PROMPT}"
 
             raise RuntimeError(
                 f"{self.name} failed after {max_retries} attempts."

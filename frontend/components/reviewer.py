@@ -21,25 +21,29 @@ def render_reviewer_page() -> None:
         reviewer_data = state.reviewer_response or {}
         outputs = [reviewer_data] if reviewer_data else []
 
-    st.subheader("Reviewer Responses")
+    st.subheader("📝 Reviewer Responses & Rebuttals")
     if outputs:
         for index, data in enumerate(outputs, start=1):
+            comment = data.get("reviewer_comment", "")
             response = data.get("response", "")
             revision = data.get("manuscript_revision", "")
-            if not response and not revision:
+            if not response and not revision and not comment:
                 continue
 
-            st.markdown(f"### Review #{index}")
-            if response:
-                st.markdown(response)
-            else:
-                st.info("No reviewer response available yet.")
+            with st.container(border=True):
+                st.markdown(f"### Review #{index}")
+                
+                if comment:
+                    st.markdown("**🔍 Reviewer Comment / Prompt:**")
+                    st.info(comment)
 
-            if revision:
-                st.divider()
-                st.subheader("Suggested Manuscript Revision")
-                st.markdown(revision)
-            elif index < len(outputs):
-                st.divider()
+                if response:
+                    st.markdown("**💬 Author Response:**")
+                    st.markdown(response)
+
+                if revision:
+                    st.markdown("**📄 Suggested Manuscript Revision:**")
+                    st.code(revision, language="latex")
     else:
-        st.info("No reviewer response available yet.")
+        st.info("No reviewer responses generated yet. Ask the Reviewer Agent to respond to a comment in the chat tab!")
+

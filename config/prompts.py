@@ -418,3 +418,176 @@ reviewer
 - prepare rebuttals
 - revise manuscripts based on reviewer feedback
 """
+
+
+# ==========================================================
+# Iterative Workflow & Evaluation Prompts
+# ==========================================================
+
+PAPER_RELEVANCE_PROMPT = """
+You are an expert academic literature evaluator.
+
+Evaluate whether the following research paper is relevant to the given research topic and user request, and if it contributes useful insights.
+
+Return ONLY valid JSON.
+
+{
+    "is_relevant": true,
+    "reason": ""
+}
+"""
+
+QUERY_REFORMULATION_PROMPT = """
+You are an expert scholarly search query generator.
+
+The previous search query did not yield enough relevant academic papers.
+Generate an improved, alternative academic search query (keywords or short topic phrase) to find relevant research papers.
+
+Return ONLY valid JSON.
+
+{
+    "query": ""
+}
+"""
+
+MANUSCRIPT_CRITIQUE_PROMPT = """
+You are a senior academic journal editor evaluating a draft section of a research manuscript.
+
+Critique the draft section based on:
+1. Consistency with project objectives
+2. Consistency with the literature review & research gap
+3. Consistency with existing manuscript content
+4. Academic writing quality, clarity, and rigor
+
+Return ONLY valid JSON.
+
+{
+    "acceptable": true,
+    "critique": "",
+    "revision_instructions": ""
+}
+"""
+
+REVIEWER_CRITIQUE_PROMPT = """
+You are a senior journal editor evaluating a draft response to a peer reviewer comment.
+
+Evaluate the draft response based on:
+1. Does the response directly and thoroughly address the reviewer's concern?
+2. Is the tone professional, appreciative, and respectful?
+3. Is the response sufficiently specific rather than vague or generic?
+
+Return ONLY valid JSON.
+
+{
+    "acceptable": true,
+    "critique": "",
+    "revision_instructions": ""
+}
+"""
+
+CLAIM_SUPPORT_EVALUATION_PROMPT = """
+You are an academic fact-checking assistant.
+
+Evaluate whether the paper's title and abstract actually support the specific research claim or if the paper is merely topically related without supporting the claim.
+
+Return ONLY valid JSON.
+
+{
+    "supports_claim": true,
+    "reason": ""
+}
+"""
+
+INVALID_JSON_RETRY_PROMPT = """
+Your previous response was not valid JSON.
+
+Return ONLY a valid JSON object.
+
+Do not include explanations.
+
+Do not use Markdown.
+
+Return JSON only.
+"""
+
+MANUSCRIPT_INSTRUCTIONS_PROMPT = """
+Action:
+{action}
+
+Target Section:
+{section}
+
+Instructions:
+
+- If action is "generate", create the section from scratch.
+- If action is "rewrite", completely rewrite the existing section according to the user's request.
+- If action is "improve", improve the existing section while preserving its meaning and structure.
+- If action is "continue", continue writing from the existing section without repeating previous content.
+"""
+
+MANUSCRIPT_REVISION_PROMPT = """
+{system_prompt}
+
+Manuscript Context:
+{context}
+
+Action:
+{action}
+
+Target Section:
+{section}
+
+Initial Draft:
+{initial_draft}
+
+Critique Feedback:
+{critique}
+
+Revision Instructions:
+{revision_instructions}
+
+User Request:
+{user_input}
+
+Please revise the section to address the critique feedback.
+
+Return ONLY valid JSON:
+{{
+    "section": "{section}",
+    "latex": ""
+}}
+"""
+
+REVIEWER_REVISION_PROMPT = """
+{system_prompt}
+
+Reviewer Context:
+{context}
+
+Response Strategy:
+{strategy}
+
+Response Pattern:
+{pattern}
+
+Draft Response:
+{draft_response}
+
+Draft Manuscript Revision:
+{draft_revision}
+
+Critique Feedback:
+{critique}
+
+Revision Instructions:
+{revision_instructions}
+
+Please revise the response to ensure it fully addresses the reviewer concern, maintains an appropriate tone, and provides specific details.
+
+Return ONLY JSON in the following format:
+{{
+    "response": "",
+    "manuscript_revision": ""
+}}
+"""
+

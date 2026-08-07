@@ -11,7 +11,15 @@ from tools.pdf_reader import PDFReader
 from tools.paper_analyzer import PaperAnalyzer
 
 
-from config.prompts import LITERATURE_SYSTEM_PROMPT
+from config.prompts import (
+    LITERATURE_SYSTEM_PROMPT,
+    PAPER_RELEVANCE_PROMPT,
+    QUERY_REFORMULATION_PROMPT,
+)
+
+MAX_SEARCH_ITERATIONS = 3
+MAX_RETRIEVED_PAPERS = 10
+TARGET_RELEVANT_PAPERS = 5
 
 
 class LiteratureAgent(BaseAgent):
@@ -32,13 +40,44 @@ class LiteratureAgent(BaseAgent):
 
         self.analyzer = PaperAnalyzer()
 
+    def _build_context(
+        self,
+        state: ProjectState
+    ) -> str:
+
+        keywords = ", ".join(state.keywords) if state.keywords else "None"
+        existing_titles = "\n".join(
+            f"- {p.metadata.title} (DOI: {p.metadata.doi})"
+            for p in state.papers
+            if p.metadata and p.metadata.title
+        ) or "None"
+
+        return f"""
+        Topic:
+        {state.topic or "None"}
+
+        Keywords:
+        {keywords}
+
+        Existing Papers:
+        {existing_titles}
+        """
+
     def _build_prompt(
         self,
         state: ProjectState,
         user_input: str
     ) -> str:
 
-        return ""
+        return f"""
+        {LITERATURE_SYSTEM_PROMPT}
+
+        Literature Context:
+        {self._build_context(state)}
+
+        User Request:
+        {user_input}
+        """
 
     def _build_query(
         self,
@@ -57,6 +96,68 @@ class LiteratureAgent(BaseAgent):
             )
 
         return user_input
+
+    def _judge_relevance(
+        self,
+        paper,
+        topic: str,
+        user_input: str
+    ) -> bool:
+
+        title = getattr(paper.metadata, "title", "") or ""
+        abstract = getattr(paper.metadata, "abstract", "") or ""
+
+        if not abstract.strip():
+            return False
+
+        prompt = f"""
+        {PAPER_RELEVANCE_PROMPT}
+
+        Topic:
+        {topic}
+
+        User Request:
+        {user_input}
+
+        Paper Title:
+        {title}
+
+        Paper Abstract:
+        {abstract}
+        """
+
+        try:
+            data = self._invoke_llm(prompt)
+            return data.get("is_relevant", True)
+        except Exception:
+            return True
+
+    def _reformulate_query(
+        self,
+        state: ProjectState,
+        current_query: str,
+        user_input: str
+    ) -> str:
+
+        prompt = f"""
+        {QUERY_REFORMULATION_PROMPT}
+
+        Literature Context:
+        {self._build_context(state)}
+
+        Previous Search Query:
+        {current_query}
+
+        User Request:
+        {user_input}
+        """
+
+        try:
+            data = self._invoke_llm(prompt)
+            new_query = data.get("query", "").strip()
+            return new_query if new_query else current_query
+        except Exception:
+            return f"{current_query} survey"
 
     def _update_state(
         self,
@@ -78,65 +179,117 @@ class LiteratureAgent(BaseAgent):
         user_input: str
     ):
 
-        query = self._build_query(
+        current_query = self._build_query(
             state,
             user_input
         )
 
-        try:
+        existing_dois = {
+            p.metadata.doi for p in state.papers
+            if p.metadata and p.metadata.doi
+        }
+        existing_titles = {
+            p.metadata.title.lower() for p in state.papers
+            if p.metadata and p.metadata.title
+        }
 
-            arxiv_papers = self.arxiv.run(
-                query,
-                max_results=10
+        collected_papers = list(state.papers)
+
+        for iteration in range(1, MAX_SEARCH_ITERATIONS + 1):
+
+            try:
+
+                arxiv_papers = self.arxiv.run(
+                    current_query,
+                    max_results=MAX_RETRIEVED_PAPERS
+                )
+
+            except Exception as e:
+
+                self.logger.warning(f"ArXiv failed: {e}")
+
+                arxiv_papers = []
+
+            try:
+
+                openalex_papers = self.openalex.run(
+                    current_query,
+                    max_results=MAX_RETRIEVED_PAPERS
+                )
+
+            except Exception as e:
+
+                self.logger.warning(f"OpenAlex failed: {e}")
+
+                openalex_papers = []
+
+            if not arxiv_papers and not openalex_papers and not collected_papers:
+
+                raise RuntimeError(
+                    "No literature sources available."
+                )
+
+            fetched_papers = self.paper_manager.run(
+                arxiv_papers,
+                openalex_papers
             )
 
-        except Exception as e:
+            new_relevant_count = 0
 
-            print(f"ArXiv failed: {e}")
+            for paper in fetched_papers:
 
-            arxiv_papers = []
+                doi = getattr(paper.metadata, "doi", "")
+                title = getattr(paper.metadata, "title", "").lower()
 
+                if (doi and doi in existing_dois) or (title and title in existing_titles):
+                    continue
 
-        try:
+                is_relevant = self._judge_relevance(
+                    paper,
+                    state.topic or current_query,
+                    user_input
+                )
 
-            openalex_papers = self.openalex.run(
-                query,
-                max_results=10
-            )
+                if is_relevant:
 
-        except Exception as e:
+                    abstract = getattr(paper.metadata, "abstract", "") or ""
+                    if abstract.strip():
+                        try:
+                            paper.analysis = self.analyzer.run(abstract)
+                        except Exception as e:
+                            self.logger.warning(f"Paper analysis failed for {paper.metadata.title}: {e}")
 
-            print(f"OpenAlex failed: {e}")
+                    collected_papers.append(paper)
+                    if doi:
+                        existing_dois.add(doi)
+                    if title:
+                        existing_titles.add(title)
+                    new_relevant_count += 1
 
-            openalex_papers = []
+            state.papers = collected_papers
 
+            if len(collected_papers) >= TARGET_RELEVANT_PAPERS or (iteration > 1 and new_relevant_count > 0):
+                break
 
-        if not arxiv_papers and not openalex_papers:
-
-            raise RuntimeError(
-                "No literature sources available."
-            )
-
-        papers = self.paper_manager.run(
-            arxiv_papers,
-            openalex_papers
-        )
+            if iteration < MAX_SEARCH_ITERATIONS:
+                self.logger.info("insufficient relevant papers")
+                current_query = self._reformulate_query(
+                    state,
+                    current_query,
+                    user_input
+                )
 
         data = {
 
-            "response": f"I found {len(papers)} relevant papers.",
+            "response": f"I found {len(state.papers)} relevant papers.",
 
-            "papers": papers
+            "papers": state.papers
 
         }
 
         state = self._update_state(
             state,
             data
-        )
-        
-        state = self.analyze_papers(
-            state
         )
 
         return state, data

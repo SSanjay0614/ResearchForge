@@ -6,7 +6,9 @@ from models.citation import Citation
 from models.citation_action import CitationAction
 
 from config.prompts import (
-    CITATION_ACTION_PROMPT
+    CITATION_ACTION_PROMPT,
+    CLAIM_SUPPORT_EVALUATION_PROMPT,
+    QUERY_REFORMULATION_PROMPT,
 )
 
 from llm.ollama_provider import ollama_provider
@@ -15,6 +17,8 @@ from utils.parser import parse_json
 
 from tools.crossref_tool import CrossrefTool
 from tools.openalex_tool import OpenAlexTool
+
+MAX_CLAIM_SEARCH_ITERATIONS = 3
 
 
 class CitationAgent(BaseAgent):
@@ -32,6 +36,17 @@ class CitationAgent(BaseAgent):
 
         self.openalex = OpenAlexTool()
 
+    def _build_context(
+        self,
+        action: CitationAction,
+        user_input: str
+    ) -> str:
+
+        if action.workflow == "title":
+            return f"Requested Paper Title: {action.title}"
+        elif action.workflow == "claim":
+            return f"Research Claim: {user_input or action.query}"
+        return "Project Papers Citation Request"
 
     def _build_prompt(
         self,
@@ -66,6 +81,59 @@ User Request
             **data
         )
 
+    def _evaluate_claim_support(
+        self,
+        paper,
+        claim: str
+    ) -> bool:
+
+        title = getattr(paper.metadata, "title", "") if hasattr(paper, "metadata") else getattr(paper, "title", "")
+        abstract = getattr(paper.metadata, "abstract", "") if hasattr(paper, "metadata") else getattr(paper, "abstract", "")
+
+        if not title:
+            return False
+
+        prompt = f"""
+        {CLAIM_SUPPORT_EVALUATION_PROMPT}
+
+        Research Claim:
+        {claim}
+
+        Paper Title:
+        {title}
+
+        Paper Abstract:
+        {abstract or 'N/A'}
+        """
+
+        try:
+            data = self._invoke_llm(prompt)
+            return data.get("supports_claim", True)
+        except Exception:
+            return True
+
+    def _reformulate_claim_query(
+        self,
+        claim: str,
+        current_query: str
+    ) -> str:
+
+        prompt = f"""
+        {QUERY_REFORMULATION_PROMPT}
+
+        Research Claim:
+        {claim}
+
+        Previous Query:
+        {current_query}
+        """
+
+        try:
+            data = self._invoke_llm(prompt)
+            new_query = data.get("query", "").strip()
+            return new_query if new_query else current_query
+        except Exception:
+            return f"{claim} evidence"
 
     def _update_state(
         self,
@@ -82,7 +150,6 @@ User Request
         )
 
         return state
-
 
     def run(
         self,
@@ -195,57 +262,67 @@ User Request
 
         elif action.workflow == "claim":
 
-            papers = self.openalex.run(
-                action.query,
-                max_results=5
-            )
+            claim_text = user_input or action.query
+            current_query = action.query or claim_text
 
-            for paper in papers:
-
-                doi = paper.metadata.doi
-
-                if doi.startswith(
-                    "https://doi.org/"
-                ):
-
-                    doi = doi.replace(
-                        "https://doi.org/",
-                        ""
-                    )
-
-                if not doi:
-
-                    continue
+            for iteration in range(1, MAX_CLAIM_SEARCH_ITERATIONS + 1):
 
                 try:
-
-                    bibtex = self.crossref.get_bibtex(
-                        doi
+                    candidate_papers = self.openalex.run(
+                        current_query,
+                        max_results=5
                     )
-
-                    citations.append(
-
-                        Citation(
-
-                            title=paper.metadata.title,
-
-                            authors=", ".join(
-                                paper.metadata.authors
-                            ),
-
-                            year=paper.metadata.year,
-
-                            doi=doi,
-
-                            bibtex=bibtex
-
-                        )
-
-                    )
-
                 except Exception:
+                    candidate_papers = []
 
-                    continue
+                supporting_papers = []
+                for paper in candidate_papers:
+                    if self._evaluate_claim_support(paper, claim_text):
+                        supporting_papers.append(paper)
+
+                if supporting_papers:
+                    for paper in supporting_papers:
+
+                        doi = paper.metadata.doi
+
+                        if doi.startswith(
+                            "https://doi.org/"
+                        ):
+                            doi = doi.replace(
+                                "https://doi.org/",
+                                ""
+                            )
+
+                        if not doi:
+                            continue
+
+                        try:
+                            bibtex = self.crossref.get_bibtex(
+                                doi
+                            )
+                            citations.append(
+                                Citation(
+                                    title=paper.metadata.title,
+                                    authors=", ".join(
+                                        paper.metadata.authors
+                                    ),
+                                    year=paper.metadata.year,
+                                    doi=doi,
+                                    bibtex=bibtex
+                                )
+                            )
+                        except Exception:
+                            continue
+
+                if citations:
+                    break
+
+                if iteration < MAX_CLAIM_SEARCH_ITERATIONS:
+                    self.logger.info("insufficient supporting papers for claim")
+                    current_query = self._reformulate_claim_query(
+                        claim_text,
+                        current_query
+                    )
 
         data = {
 

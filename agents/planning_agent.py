@@ -11,6 +11,34 @@ class PlanningAgent(BaseAgent):
 
         super().__init__("Planning Agent")
 
+    def _build_context(
+        self,
+        state: ProjectState
+    ) -> str:
+
+        objectives = "\n".join(
+            f"- {obj}"
+            for obj in state.objectives
+        ) or "None"
+
+        keywords = "\n".join(
+            f"- {key}"
+            for key in state.keywords
+        ) or "None"
+
+        return f"""
+        Topic:
+        {state.topic or "None"}
+
+        Description:
+        {state.description or "None"}
+
+        Objectives:
+        {objectives}
+
+        Keywords:
+        {keywords}
+        """
 
     def _build_prompt(
         self,
@@ -21,9 +49,9 @@ class PlanningAgent(BaseAgent):
         return f"""
         {PLANNING_SYSTEM_PROMPT}
 
-        Current Project State
+        Planning Context
 
-        {self._format_state(state)}
+        {self._build_context(state)}
 
         User Request:
         {user_input}

@@ -14,40 +14,36 @@ class SynthesisAgent(BaseAgent):
             "Literature Synthesis Agent"
         )
         
-    def _format_papers(
+    def _build_context(
         self,
         state: ProjectState
     ) -> str:
 
-        papers = []
+        formatted = []
 
         for i, paper in enumerate(state.papers, 1):
+            title = getattr(paper.metadata, "title", "Untitled Paper")
+            abstract = getattr(paper.metadata, "abstract", "")
+            
+            analysis_str = "No analysis available"
+            if paper.analysis:
+                analysis_str = f"""
+                Problem Statement: {paper.analysis.problem_statement or 'N/A'}
+                Contribution: {paper.analysis.contribution or 'N/A'}
+                Methodology: {paper.analysis.methodology or 'N/A'}
+                Results: {paper.analysis.results or 'N/A'}
+                """.strip()
 
-            if not paper.analysis:
-                continue
-
-            papers.append(
+            formatted.append(
                 f"""
-    Paper {i}
-
-    Title:
-    {paper.metadata.title}
-
-    Problem Statement:
-    {paper.analysis.problem_statement}
-
-    Contribution:
-    {paper.analysis.contribution}
-
-    Methodology:
-    {paper.analysis.methodology}
-
-    Results:
-    {paper.analysis.results}
-    """
+                Paper {i}: {title}
+                Abstract: {abstract}
+                Analysis:
+                {analysis_str}
+                """
             )
 
-        return "\n\n".join(papers)
+        return "\n\n".join(formatted) if formatted else "No papers collected yet."
     
     def _build_prompt(
         self,
@@ -55,25 +51,22 @@ class SynthesisAgent(BaseAgent):
         user_input: str
     ) -> str:
 
-        papers = self._format_papers(
+        context = self._build_context(
             state
         )
 
         return f"""
-    {SYNTHESIS_SYSTEM_PROMPT}
+        {SYNTHESIS_SYSTEM_PROMPT}
 
-    Research Topic
+        Research Topic:
+        {state.topic}
 
-    {state.topic}
+        Papers and Analyses Context:
+        {context}
 
-    Analyzed Papers
-
-    {papers}
-
-    User Request
-
-    {user_input}
-    """
+        User Request:
+        {user_input}
+        """
     
     def _update_state(
         self,

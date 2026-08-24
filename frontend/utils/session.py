@@ -30,11 +30,31 @@ def get_storage() -> ProjectStorage:
 def get_state() -> ProjectState:
     if "project_state" not in st.session_state:
         st.session_state.project_state = ProjectState()
+    elif (
+        not hasattr(st.session_state.project_state, "pending_checkpoint")
+        or not hasattr(st.session_state.project_state, "pre_manuscript_info")
+        or not hasattr(st.session_state.project_state, "pre_manuscript_completed")
+    ):
+        old_state = st.session_state.project_state
+        state_data = old_state.model_dump() if hasattr(old_state, "model_dump") else old_state.dict()
+        st.session_state.project_state = ProjectState(**state_data)
     return st.session_state.project_state
 
 
 def set_state(state: ProjectState) -> None:
     st.session_state.project_state = state
+
+
+def set_pending_checkpoint(state: ProjectState, checkpoint: dict) -> ProjectState:
+    if (
+        not hasattr(state, "pending_checkpoint")
+        or not hasattr(state, "pre_manuscript_info")
+        or not hasattr(state, "pre_manuscript_completed")
+    ):
+        state_data = state.model_dump() if hasattr(state, "model_dump") else state.dict()
+        state = ProjectState(**state_data)
+    object.__setattr__(state, "pending_checkpoint", checkpoint)
+    return state
 
 
 def save_current_project(state=None, project_id=None) -> None:

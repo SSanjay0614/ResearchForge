@@ -3,6 +3,10 @@ langchain
 langchain-core
 langchain-ollama
 
+streamlit
+
+google-genai
+
 ollama
 
 pydantic

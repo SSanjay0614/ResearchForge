@@ -88,9 +88,32 @@ class ManuscriptAgent(BaseAgent):
         Research Gap:
         {state.research_gap or "None"}
 
+        Pre-Manuscript Information:
+        {self._format_pre_manuscript_info(state)}
+
         Relevant Manuscript Section:
         {relevant_content}
         """
+
+    def _format_pre_manuscript_info(self, state: ProjectState) -> str:
+        info = getattr(state, "pre_manuscript_info", None) or {}
+        if not info:
+            return "None"
+        return "\n".join(
+            f"{label}: {info.get(key) or 'None'}"
+            for key, label in [
+                ("research_topic", "Research Topic"),
+                ("research_description", "Research Description"),
+                ("objectives", "Objectives"),
+                ("literature_review", "Literature Review / Related Work"),
+                ("methodology", "Methodology / Approach"),
+                ("dataset_setup", "Dataset / Experimental Setup"),
+                ("results_findings", "Results / Findings"),
+                ("ablation_studies", "Ablation Studies"),
+                ("additional_notes", "Additional Information / Notes"),
+                ("target_venue", "Target Venue / Format"),
+            ]
+        )
         
     def _build_latex_source(
         self,

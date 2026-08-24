@@ -141,10 +141,17 @@ div[data-testid="stTabs"]>div>div {
     overflow: visible !important;
 }
 
+/* Keep the workspace navigation visible while browsing long conversations. */
+[data-testid="stAppViewMain"] .block-container {
+    padding-bottom: 9rem !important;
+}
+
 /*Tabs customization (Sticky Tab Bar) */
 div[data-baseweb="tab-list"] {
-    position: sticky !important;
-    top: 60px !important;
+    position: fixed !important;
+    top: 3.75rem !important;
+    left: 21rem !important;
+    right: 2rem !important;
     /* Positioned directly under Streamlit's 60px fixed top header */
     z-index: 999 !important;
     background-color: #0b0f19 !important;
@@ -154,6 +161,11 @@ div[data-baseweb="tab-list"] {
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5) !important;
     gap: 4px !important;
     margin-bottom: 1.5rem !important;
+}
+
+/* Reserve room for the fixed workspace navigation. */
+[data-testid="stTabs"] {
+    padding-top: 4.5rem !important;
 }
 
 
@@ -248,11 +260,74 @@ pre {
     }
 }
 
-.stTabs,
-.stChatFloatingInputContainer,
 .glass-card,
 .splash-container {
     animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Keep the chat composer discoverable while the message history scrolls. */
+[data-testid="stChatInput"] {
+    position: fixed !important;
+    left: 21rem !important;
+    right: 2rem !important;
+    bottom: 1rem !important;
+    z-index: 1000 !important;
+    width: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+[data-testid="stChatInput"] > div {
+    max-width: 72rem !important;
+    margin: 0 auto !important;
+}
+
+.researchforge-scroll-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    right: 1.25rem;
+    bottom: 5.75rem;
+    z-index: 100000;
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #111827;
+    font-size: 1.35rem;
+    line-height: 1;
+    cursor: pointer;
+    pointer-events: auto;
+    text-decoration: none !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.researchforge-scroll-bottom:hover {
+    background: #f8fafc;
+    color: #4f46e5;
+    border-color: #4f46e5;
+    transform: translateY(-2px);
+}
+
+@media (max-width: 768px) {
+    div[data-baseweb="tab-list"] {
+        left: 1rem !important;
+        right: 1rem !important;
+        overflow-x: auto !important;
+    }
+
+    [data-testid="stChatInput"] {
+        left: 1rem !important;
+        right: 1rem !important;
+    }
+
+    .researchforge-scroll-bottom {
+        right: 0.75rem;
+        bottom: 5.75rem;
+    }
 }
 
 /* Chat page styling details */

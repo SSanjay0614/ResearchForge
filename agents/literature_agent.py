@@ -1,6 +1,7 @@
 from agents.base_agent import BaseAgent
 
 from memory.state import ProjectState
+from models.paper_analysis import PaperAnalysis
 
 from tools.arxiv_tool import ArxivTool
 from tools.openalex_tool import OpenAlexTool
@@ -18,8 +19,9 @@ from config.prompts import (
 )
 
 MAX_SEARCH_ITERATIONS = 3
-MAX_RETRIEVED_PAPERS = 10
+MAX_RETRIEVED_PAPERS = 5
 TARGET_RELEVANT_PAPERS = 5
+MAX_ANALYZED_PAPERS = 3
 
 
 class LiteratureAgent(BaseAgent):
@@ -194,6 +196,29 @@ class LiteratureAgent(BaseAgent):
         }
 
         collected_papers = list(state.papers)
+        analyzed_papers = 0
+        analysis_fields = [
+            "contribution",
+            "problem_statement",
+            "methodology",
+            "results",
+            "limitations",
+            "future_work",
+            "strengths",
+            "weaknesses",
+            "keywords",
+            "important_findings",
+        ]
+        for paper in collected_papers:
+            analysis = getattr(paper, "analysis", None)
+            has_analysis = analysis and any(
+                getattr(analysis, field_name, None)
+                for field_name in analysis_fields
+            )
+            if has_analysis and analyzed_papers < MAX_ANALYZED_PAPERS:
+                analyzed_papers += 1
+            elif has_analysis:
+                paper.analysis = PaperAnalysis()
 
         for iteration in range(1, MAX_SEARCH_ITERATIONS + 1):
 
@@ -244,31 +269,30 @@ class LiteratureAgent(BaseAgent):
                 if (doi and doi in existing_dois) or (title and title in existing_titles):
                     continue
 
-                is_relevant = self._judge_relevance(
+                self._judge_relevance(
                     paper,
                     state.topic or current_query,
                     user_input
                 )
 
-                if is_relevant:
+                abstract = getattr(paper.metadata, "abstract", "") or ""
+                if abstract.strip() and analyzed_papers < MAX_ANALYZED_PAPERS:
+                    try:
+                        paper.analysis = self.analyzer.run(abstract)
+                        analyzed_papers += 1
+                    except Exception as e:
+                        self.logger.warning(f"Paper analysis failed for {paper.metadata.title}: {e}")
 
-                    abstract = getattr(paper.metadata, "abstract", "") or ""
-                    if abstract.strip():
-                        try:
-                            paper.analysis = self.analyzer.run(abstract)
-                        except Exception as e:
-                            self.logger.warning(f"Paper analysis failed for {paper.metadata.title}: {e}")
-
-                    collected_papers.append(paper)
-                    if doi:
-                        existing_dois.add(doi)
-                    if title:
-                        existing_titles.add(title)
-                    new_relevant_count += 1
+                collected_papers.append(paper)
+                if doi:
+                    existing_dois.add(doi)
+                if title:
+                    existing_titles.add(title)
+                new_relevant_count += 1
 
             state.papers = collected_papers
 
-            if len(collected_papers) >= TARGET_RELEVANT_PAPERS or (iteration > 1 and new_relevant_count > 0):
+            if len(collected_papers) >= TARGET_RELEVANT_PAPERS:
                 break
 
             if iteration < MAX_SEARCH_ITERATIONS:
@@ -281,7 +305,13 @@ class LiteratureAgent(BaseAgent):
 
         data = {
 
-            "response": f"I found {len(state.papers)} relevant papers.",
+            "response": "I found "
+            f"{len(state.papers)} papers.\n\n"
+            "Papers found:\n"
+            + "\n".join(
+                f"- {paper.metadata.title or 'Untitled Paper'}"
+                for paper in state.papers
+            ),
 
             "papers": state.papers
 
@@ -297,7 +327,7 @@ class LiteratureAgent(BaseAgent):
     def analyze_papers(
         self,
         state: ProjectState,
-        max_papers: int = 5
+        max_papers: int = MAX_ANALYZED_PAPERS
     ):
 
         analyzed = 0

@@ -38,6 +38,12 @@ class PlanningAgent(BaseAgent):
 
         Keywords:
         {keywords}
+
+        Literature Review:
+        {state.literature_review or "None"}
+
+        Research Gap:
+        {state.research_gap or "None"}
         """
 
     def _build_prompt(

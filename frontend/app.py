@@ -23,6 +23,7 @@ from frontend.components.literature_review import render_literature_review_page
 from frontend.components.manuscript import render_manuscript_page
 from frontend.components.citations import render_citations_page
 from frontend.components.reviewer import render_reviewer_page
+from frontend.components.project import render_pre_manuscript_info
 from frontend.utils.session import get_state, get_storage, set_state, reset_workspace, save_current_project, slugify, inject_custom_css
 
 
@@ -144,8 +145,8 @@ st.markdown("<h1 class='gradient-title'>ResearchForge</h1>", unsafe_allow_html=T
 st.caption("Plan, explore papers, synthesize literature, draft manuscripts, collect citations, and respond to reviewer feedback.")
 
 with st.container():
-    tab_chat, tab_planning, tab_literature, tab_review, tab_manuscript, tab_citations, tab_reviewer = st.tabs(
-        ["Chat", "Planning", "Literature", "Literature Review", "Manuscript", "Citations", "Reviewer"]
+    tab_chat, tab_planning, tab_literature, tab_review, tab_pre_manuscript, tab_manuscript, tab_citations, tab_reviewer = st.tabs(
+        ["Chat", "Planning", "Literature", "Literature Review", "Pre-Manuscript Info", "Manuscript", "Citations", "Reviewer"]
     )
 
 with tab_chat:
@@ -159,6 +160,9 @@ with tab_literature:
 
 with tab_review:
     render_literature_review_page()
+
+with tab_pre_manuscript:
+    render_pre_manuscript_info("workspace")
 
 with tab_manuscript:
     render_manuscript_page()

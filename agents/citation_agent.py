@@ -151,6 +151,40 @@ User Request
 
         return state
 
+    def _citation_for_project_paper(self, paper) -> Citation:
+        metadata = paper.metadata
+        doi = (metadata.doi or "").strip()
+        if doi.startswith("https://doi.org/"):
+            doi = doi.replace("https://doi.org/", "", 1)
+        elif doi.startswith("http://doi.org/"):
+            doi = doi.replace("http://doi.org/", "", 1)
+
+        authors = ", ".join(metadata.authors)
+        venue = metadata.venue or ""
+        year = metadata.year
+        bibtex = None
+
+        if doi:
+            bibtex = self.crossref.get_bibtex(doi)
+        elif metadata.title:
+            matches = self.crossref.run(metadata.title, rows=1)
+            if matches:
+                match = matches[0]
+                doi = match.doi or ""
+                authors = match.authors or authors
+                venue = match.venue or venue
+                year = match.year or year
+                bibtex = self.crossref.get_bibtex(doi) if doi else None
+
+        return Citation(
+            title=metadata.title,
+            authors=authors,
+            year=year,
+            doi=doi,
+            bibtex=bibtex or "",
+            venue=venue,
+        )
+
     def run(
         self,
         state: ProjectState,
@@ -170,47 +204,8 @@ User Request
         if action.workflow == "project":
 
             for paper in state.papers:
-
-                doi = paper.metadata.doi
-
-                if doi.startswith(
-                    "https://doi.org/"
-                ):
-
-                    doi = doi.replace(
-                        "https://doi.org/",
-                        ""
-                    )
-
-                if not doi:
-
-                    continue
-
                 try:
-
-                    bibtex = self.crossref.get_bibtex(
-                        doi
-                    )
-
-                    citations.append(
-
-                        Citation(
-
-                            title=paper.metadata.title,
-
-                            authors=", ".join(
-                                paper.metadata.authors
-                            ),
-
-                            year=paper.metadata.year,
-
-                            doi=doi,
-
-                            bibtex=bibtex
-
-                        )
-
-                    )
+                    citations.append(self._citation_for_project_paper(paper))
 
                 except Exception:
 

@@ -1,165 +1,287 @@
 # 📚 ResearchForge
 
-### A Multi-Agent Research Workflow Automation System
+### Multi-Agent Research Workflow Automation System
 
-ResearchForge is an **agentic AI platform** that automates key stages of the academic research lifecycle through a team of specialized AI agents. Instead of functioning as a generic chatbot, it orchestrates dedicated agents for **research planning, literature discovery, literature synthesis, manuscript drafting, citation management, and reviewer response generation** while maintaining a shared project workspace.
+![ResearchForge Architecture](docs/architecture.png)
 
-Built using **LangGraph** and **local LLMs with Ollama**, ResearchForge provides researchers with an intelligent workspace that streamlines repetitive research tasks while keeping them in control of every stage.
+ResearchForge is an **agentic AI platform** that assists researchers across key stages of the academic research lifecycle through six specialized agents for **research planning, literature discovery, literature synthesis, manuscript drafting, citation management, and reviewer response generation**.
+
+Built with **LangGraph, Pydantic, Streamlit, and LLMs**, ResearchForge combines automated agent workflows with optional human checkpoints, allowing researchers to stay in control while automating repetitive research tasks.
 
 ---
 
 ## 🚀 Why ResearchForge?
 
-Academic research involves repetitive and time-consuming tasks such as searching literature, analyzing papers, drafting manuscripts, managing citations, and responding to reviewer comments. These tasks often require switching between multiple tools and repeating similar workflows.
+Academic research involves repetitive tasks such as literature discovery, paper analysis, literature review generation, manuscript drafting, citation management, and reviewer response preparation.
 
-ResearchForge automates these research workflows by coordinating specialized AI agents through a shared project memory and persistent workspace. Rather than replacing the researcher, it assists throughout the research lifecycle by reducing manual effort and improving productivity.
+ResearchForge organizes these tasks into specialized agents and provides a persistent project workspace where research information, papers, manuscript sections, citations, and reviewer responses can be maintained throughout the project.
+
+The system supports both **automated agent selection** and **direct agent execution**, making it useful for both end-to-end workflows and individual research tasks.
 
 ---
 
 ## ✨ Features
 
-- 🧠 **Research Planning**
-  - Generate research ideas
-  - Define objectives and project scope
+### 🧠 Research Planning
+- Generate research ideas and project directions
+- Define objectives, scope, and research questions
+- Identify potential research gaps
 
-- 📄 **Literature Discovery**
-  - Search papers from ArXiv and OpenAlex
-  - Build a project-specific paper library
+### 📄 Literature Discovery & Analysis
+- Search research papers using ArXiv and OpenAlex
+- Evaluate paper relevance before full analysis
+- Analyze selected papers and maintain a project paper library
+- Iteratively refine searches when relevant literature is insufficient
 
-- 📖 **Literature Synthesis**
-  - Summarize research papers
-  - Identify research gaps
-  - Generate structured literature reviews
+### 📖 Literature Synthesis
+- Generate structured literature reviews
+- Compare findings across analyzed papers
+- Identify research gaps and emerging research directions
 
-- ✍️ **Manuscript Generation**
-  - Generate publication-ready LaTeX sections
-  - Rewrite, improve, or continue existing content
-  - Support custom manuscript sections
+### ✍️ Manuscript Generation
+- Generate publication-ready LaTeX sections
+- Generate, rewrite, improve, or continue existing sections
+- Support dynamically named manuscript sections
+- Perform bounded self-evaluation and revision
+- Maintain a dedicated Pre-Manuscript Information workspace
 
-- 📑 **Citation Management**
-  - Generate BibTeX entries
-  - Retrieve citation metadata
-  - Recommend references supporting research claims
+### 📑 Citation Management
+- Generate BibTeX entries
+- Retrieve citation metadata
+- Find references supporting specific research claims
+- Iteratively refine searches when supporting evidence is insufficient
 
-- 📝 **Reviewer Response Generation**
-  - Draft professional rebuttals
-  - Suggest manuscript revisions
-  - Respond to reviewer comments
+### 📝 Reviewer Response
+- Interpret reviewer comments
+- Determine response strategies such as defend, clarify, revise, or add experiments
+- Generate structured rebuttals
+- Suggest corresponding manuscript revisions
+- Self-evaluate responses for relevance and tone
 
-- 💾 **Project Workspace**
-  - Persistent project memory
-  - Save and resume research projects
-  - Interactive Streamlit interface
+### 🧭 Agentic Workflow
+- LLM-based semantic routing
+- Agent-specific context engineering
+- Bounded iterative workflows
+- Optional human-in-the-loop checkpoints
+- Continue, modify, or interrupt workflows at major research stages
+
+### 💾 Project Workspace
+- Persistent project state using structured Pydantic models
+- Save and resume research projects
+- Editable research and manuscript information
+- JSON-based project storage
+- Streamlit-based interactive workspace
+
+### 🎛️ Flexible Execution
+- **Smart Router** for automatic agent selection
+- **Manual Agent Selection** for direct agent execution
+- Normal chat remains available throughout the workspace
 
 ---
 
 ## 🔄 Workflow
 
 ```text
-                    User Request
-                          │
-                          ▼
-               LangGraph Workflow Router
-                          │
-                          ▼
-              Select Specialized AI Agent
-                          │
-                          ▼
-        Research APIs • Project Memory • Storage
-                          │
-                          ▼
-               Updated Research Workspace
+                         User Request
+                              │
+                              ▼
+                    LangGraph Workflow Router
+                              │
+                              ▼
+                    Select Specialized Agent
+                              │
+            ┌─────────────────┴─────────────────┐
+            │                                   │
+            ▼                                   ▼
+     Agent Context Builder               Human Checkpoint
+            │                         (when applicable)
+            ▼                                   │
+        LLM / Tools ◄──────────────────────────┘
+            │
+            ▼
+      Structured Response
+            │
+            ▼
+      Project State Update
+            │
+            ▼
+       Persistent Workspace
+
+### Agentic Literature Workflow
+
+```text
+Agentic Literature Workflow
+Search Papers
+   │
+Agentic Literature Workflow
+Search Papers
+     │
+     ▼
+Relevance Evaluation
+     │
+ ┌───┴────┐
+ │        │
+KEEP    REJECT
+ │
+ ▼
+Paper Analysis
+ │
+ ▼
+Enough Relevant Papers?
+ │
+ ├── Yes ──► Continue
+ │
+ └── No ───► Refine Query → Search Again
 ```
 
----
+### Human-in-the-Loop Workflow
+
+```text
+Human-in-the-Loop Workflow
+Planning
+Human-in-the-Loop Workflow
+Planning
+   │
+   ▼
+[Review / Modify Plan]
+   │
+   ▼
+Literature Analysis
+   │
+   ▼
+[Review Literature]
+   │
+   ▼
+Literature Synthesis
+   │
+   ▼
+[Proceed to Manuscript]
+   │
+   ▼
+Manuscript
+```
+
+These checkpoints are optional. Users can continue the workflow, modify the
+current work, or directly use individual agents.
 
 ## 🏗️ Architecture
 
 ```text
-                           User
-                             │
-                             ▼
-                  Streamlit Web Interface
-                             │
-                             ▼
-                    LangGraph Workflow Router
-                             │
-      ┌──────────┬──────────┬──────────┬──────────┬──────────┬──────────┐
-      ▼          ▼          ▼          ▼          ▼          ▼
- Planning   Literature  Synthesis  Manuscript  Citation  Reviewer
-   Agent       Agent      Agent       Agent      Agent      Agent
-      └──────────┬──────────┴──────────┬──────────┴──────────┘
-                 ▼
-          Shared Project Memory
-                 │
-        ┌────────┴─────────┐
-        ▼                  ▼
-   External APIs      Project Storage
- (ArXiv • OpenAlex •    (JSON Workspace)
-      CrossRef)
-```
+                                             User
+                                            │
+                                            ▼
+                                          Streamlit Web Interface
+                                            │
+                                       ┌──────────┴──────────┐
+                                       │                     │
+                                     Smart Router          Manual Selection
+                                       │                     │
+                                       └──────────┬──────────┘
+                                            ▼
+                                         LangGraph Workflow
+                                            │
+                                   ┌──────────┬───────────┼───────────┬──────────┬──────────┐
+                                   ▼          ▼           ▼           ▼          ▼          ▼
+                                   Planning   Literature   Synthesis   Manuscript  Citation  Reviewer
+                                 Agent      Agent        Agent       Agent      Agent     Agent
+                                   │          │           │           │          │          │
+                                   └──────────┴───────────┴─────┬─────┴──────────┴──────────┘
+                                                ▼
+                                           Agent Context
+                                              Builders
+                                                │
+                                                ▼
+                                             LLM / Tools
+                                                │
+                                                ▼
+                                          Structured Responses
+                                                │
+                                                ▼
+                                             ProjectState
+                                                │
+                                          ┌───────────────┴───────────────┐
+                                          ▼                               ▼
+                                       JSON Project Storage              External APIs
+                                                ArXiv • OpenAlex
+                                                    • CrossRef
+                              ```
+                              User
+                              ## 🛠️ Tech Stack
 
----
+                              | Technology | Purpose |
+                              |---|---|
+                              | Python | Core application and agent development |
+                              | LangGraph | Agent orchestration and workflow routing |
+                              | Pydantic | Structured state and data validation |
+                              | Ollama | Local LLM inference |
+                              | Streamlit | Interactive research workspace |
+                              | ArXiv API | Research paper discovery |
+                              | OpenAlex API | Literature discovery and metadata |
+                              | CrossRef API | Citation metadata and BibTeX retrieval |
+                              | JSON | Persistent project storage |
 
-## 🛠️ Tech Stack
+                              ## 🚀 Getting Started
 
-| Technology | Purpose |
-|------------|---------|
-| **Python** | Core application development |
-| **LangGraph** | Multi-agent workflow orchestration |
-| **Ollama** | Local Large Language Model (LLM) inference |
-| **Streamlit** | Interactive web application |
-| **Pydantic** | Data validation and state management |
-| **APIs** | **ArXiv**, **OpenAlex**, and **CrossRef** for literature retrieval, metadata, and citations |
+                              ### Clone the Repository
 
----
+                              ```bash
+                              git clone https://github.com/SSanjay0614/ResearchForge.git
+                              cd ResearchForge
+                              ```
 
-## 🚀 Getting Started
+                              ### Install Dependencies
 
-### Clone the repository
+                              ```bash
+                              pip install -r requirements.txt
+                              ```
 
-```bash
-git clone https://github.com/<your-username>/ResearchForge.git
+                              ### Pull the Local LLM
 
-cd ResearchForge
-```
+                              ```bash
+                              ollama pull gemma4
+                              ```
 
-### Install dependencies
+                              ### Launch ResearchForge
 
-```bash
-pip install -r requirements.txt
-```
+                              ```bash
+                              streamlit run frontend/app.py
+                              ```
 
-### Pull the required Ollama model
 
-```bash
-ollama pull gemma4
-```
+The application opens with the Project Manager, where users can create a new
+research project or open an existing one.
 
-### Launch the application
+The workspace provides dedicated sections for:
 
-```bash
-streamlit run frontend/app.py
-```
+Chat
+Planning
+Literature
+Literature Review
+Pre-Manuscript Info
+Manuscript
+Citations
+Reviewer
 
----
+
+## 📑 Citation Handling
+
+ResearchForge supports both paper-level BibTeX generation and claim-based
+reference retrieval.
+
+For papers with DOI information, CrossRef metadata can be used directly.
+For papers without DOI information, the system can search CrossRef using the
+paper title and retrieve matching citation metadata when available.
 
 ## 🔮 Future Work
 
-- RAG-powered long-term project memory
-- Google Scholar integration
-- Automatic PDF ingestion and indexing
 - Overleaf synchronization
 - Journal-specific manuscript templates
 - Multi-user collaboration
-
----
+- Cloud deployment
 
 ## 👨‍💻 Author
 
-**Sanjay S**
+Sanjay S
 
-B.Tech Computer Science and Engineering  
+B.Tech Computer Science and Engineering
 VIT Chennai
-
----

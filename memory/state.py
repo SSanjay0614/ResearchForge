@@ -44,6 +44,12 @@ class ProjectState(BaseModel):
     
     needs_more_information: bool = False
 
+    pending_checkpoint: Dict = Field(default_factory=dict)
+
+    pre_manuscript_info: Dict[str, str] = Field(default_factory=dict)
+
+    pre_manuscript_completed: bool = False
+
 
     # ---------------------------------
     # Literature

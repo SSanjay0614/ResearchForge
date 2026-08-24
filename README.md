@@ -2,7 +2,7 @@
 
 ### Multi-Agent Research Workflow Automation System
 
-![ResearchForge Architecture](docs/architecture.png)
+![ResearchForge Architecture](docs/ResearchForge Architecture.png)
 
 ResearchForge is an **agentic AI platform** that assists researchers across key stages of the academic research lifecycle through six specialized agents for **research planning, literature discovery, literature synthesis, manuscript drafting, citation management, and reviewer response generation**.
 

@@ -79,173 +79,47 @@ The system supports both **automated agent selection** and **direct agent execut
 
 ---
 
-## 🔄 Workflow
 
-```text
-                         User Request
-                              │
-                              ▼
-                    LangGraph Workflow Router
-                              │
-                              ▼
-                    Select Specialized Agent
-                              │
-            ┌─────────────────┴─────────────────┐
-            │                                   │
-            ▼                                   ▼
-     Agent Context Builder               Human Checkpoint
-            │                         (when applicable)
-            ▼                                   │
-        LLM / Tools ◄──────────────────────────┘
-            │
-            ▼
-      Structured Response
-            │
-            ▼
-      Project State Update
-            │
-            ▼
-       Persistent Workspace
+## 🛠️ Tech Stack
 
-### Agentic Literature Workflow
+| Technology | Purpose |
+|---|---|
+| Python | Core application and agent development |
+| LangGraph | Agent orchestration and workflow routing |
+| Pydantic | Structured state and data validation |
+| Ollama | Local LLM inference |
+| Streamlit | Interactive research workspace |
+| ArXiv API | Research paper discovery |
+| OpenAlex API | Literature discovery and metadata |
+| CrossRef API | Citation metadata and BibTeX retrieval |
+| JSON | Persistent project storage |
 
-```text
-Agentic Literature Workflow
-Search Papers
-   │
-Agentic Literature Workflow
-Search Papers
-     │
-     ▼
-Relevance Evaluation
-     │
- ┌───┴────┐
- │        │
-KEEP    REJECT
- │
- ▼
-Paper Analysis
- │
- ▼
-Enough Relevant Papers?
- │
- ├── Yes ──► Continue
- │
- └── No ───► Refine Query → Search Again
+## 🚀 Getting Started
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/SSanjay0614/ResearchForge.git
+cd ResearchForge
 ```
 
-### Human-in-the-Loop Workflow
+### Install Dependencies
 
-```text
-Human-in-the-Loop Workflow
-Planning
-Human-in-the-Loop Workflow
-Planning
-   │
-   ▼
-[Review / Modify Plan]
-   │
-   ▼
-Literature Analysis
-   │
-   ▼
-[Review Literature]
-   │
-   ▼
-Literature Synthesis
-   │
-   ▼
-[Proceed to Manuscript]
-   │
-   ▼
-Manuscript
+```bash
+pip install -r requirements.txt
 ```
 
-These checkpoints are optional. Users can continue the workflow, modify the
-current work, or directly use individual agents.
+### Pull the Local LLM
 
-## 🏗️ Architecture
+```bash
+ollama pull gemma4
+```
 
-```text
-                                             User
-                                            │
-                                            ▼
-                                          Streamlit Web Interface
-                                            │
-                                       ┌──────────┴──────────┐
-                                       │                     │
-                                     Smart Router          Manual Selection
-                                       │                     │
-                                       └──────────┬──────────┘
-                                            ▼
-                                         LangGraph Workflow
-                                            │
-                                   ┌──────────┬───────────┼───────────┬──────────┬──────────┐
-                                   ▼          ▼           ▼           ▼          ▼          ▼
-                                   Planning   Literature   Synthesis   Manuscript  Citation  Reviewer
-                                 Agent      Agent        Agent       Agent      Agent     Agent
-                                   │          │           │           │          │          │
-                                   └──────────┴───────────┴─────┬─────┴──────────┴──────────┘
-                                                ▼
-                                           Agent Context
-                                              Builders
-                                                │
-                                                ▼
-                                             LLM / Tools
-                                                │
-                                                ▼
-                                          Structured Responses
-                                                │
-                                                ▼
-                                             ProjectState
-                                                │
-                                          ┌───────────────┴───────────────┐
-                                          ▼                               ▼
-                                       JSON Project Storage              External APIs
-                                                ArXiv • OpenAlex
-                                                    • CrossRef
-                              ```
-                              User
-                              ## 🛠️ Tech Stack
+### Launch ResearchForge
 
-                              | Technology | Purpose |
-                              |---|---|
-                              | Python | Core application and agent development |
-                              | LangGraph | Agent orchestration and workflow routing |
-                              | Pydantic | Structured state and data validation |
-                              | Ollama | Local LLM inference |
-                              | Streamlit | Interactive research workspace |
-                              | ArXiv API | Research paper discovery |
-                              | OpenAlex API | Literature discovery and metadata |
-                              | CrossRef API | Citation metadata and BibTeX retrieval |
-                              | JSON | Persistent project storage |
-
-                              ## 🚀 Getting Started
-
-                              ### Clone the Repository
-
-                              ```bash
-                              git clone https://github.com/SSanjay0614/ResearchForge.git
-                              cd ResearchForge
-                              ```
-
-                              ### Install Dependencies
-
-                              ```bash
-                              pip install -r requirements.txt
-                              ```
-
-                              ### Pull the Local LLM
-
-                              ```bash
-                              ollama pull gemma4
-                              ```
-
-                              ### Launch ResearchForge
-
-                              ```bash
-                              streamlit run frontend/app.py
-                              ```
+```bash
+streamlit run frontend/app.py
+```
 
 
 The application opens with the Project Manager, where users can create a new

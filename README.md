@@ -128,23 +128,22 @@ research project or open an existing one.
 The workspace provides dedicated sections for:
 
 Chat
+
 Planning
+
 Literature
+
 Literature Review
+
 Pre-Manuscript Info
+
 Manuscript
+
 Citations
+
 Reviewer
 
 
-## 📑 Citation Handling
-
-ResearchForge supports both paper-level BibTeX generation and claim-based
-reference retrieval.
-
-For papers with DOI information, CrossRef metadata can be used directly.
-For papers without DOI information, the system can search CrossRef using the
-paper title and retrieve matching citation metadata when available.
 
 ## 🔮 Future Work
 

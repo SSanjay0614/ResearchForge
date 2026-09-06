@@ -11,10 +11,7 @@ from config.prompts import (
     REVIEWER_ACTION_PROMPT,
     REVIEWER_CRITIQUE_PROMPT,
     REVIEWER_REVISION_PROMPT,
-)
-
-from examples.reviewer_examples import (
-    REVIEWER_RESPONSE_PATTERNS
+    REVIEWER_RESPONSE_PATTERNS,
 )
 
 from utils.parser import parse_json

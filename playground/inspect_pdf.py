@@ -3,6 +3,8 @@ from tools.pdf_reader import PDFReader
 
 reader = PDFReader()
 
-text = reader.run("data/papers/paper.pdf")
+pages = reader.run("data/papers/paper.pdf")
+
+text = "\n".join(pages)
 
 print(text[:8000])

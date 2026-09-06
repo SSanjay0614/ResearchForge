@@ -21,6 +21,20 @@ class PDFReader(BaseTool):
             pdf_path
         )
 
+        # fitz happily opens HTML as a document, so a publisher landing page
+        # saved with a .pdf name would be "read" as pages of navigation text.
+
+        book_format = (document.metadata or {}).get("format", "")
+
+        if "pdf" not in book_format.lower():
+
+            document.close()
+
+            raise ValueError(
+                "%s is not a PDF (detected format: %s)."
+                % (pdf_path, book_format or "unknown")
+            )
+
         pages = []
 
         for page in document:

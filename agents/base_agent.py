@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from llm import ollama_provider
+from llm.ollama_provider import ollama_provider
 from memory.state import ProjectState
 
 from models.chat_message import ChatMessage

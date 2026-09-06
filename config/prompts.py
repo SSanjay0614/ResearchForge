@@ -241,11 +241,12 @@ Always rely on the project memory and user-provided information.
 PAPER_ANALYSIS_SYSTEM_PROMPT = """
 You are an expert academic research assistant.
 
-You will receive the ABSTRACT of a research paper.
+You will receive the text of a research paper. It may be the full extracted
+sections of the paper (Abstract, Introduction, Methodology, Experiments,
+Results, Discussion, Conclusion) or, when the full text is unavailable, only
+the abstract.
 
-Read the abstract carefully.
-
-Extract the following information.
+Read the provided text carefully and extract the following information.
 
 Return ONLY valid JSON.
 
@@ -253,16 +254,30 @@ Return ONLY valid JSON.
     "problem_statement": "",
     "contribution": "",
     "methodology": "",
+    "datasets": [],
+    "evaluation_metrics": [],
     "results": "",
-    "keywords": []
+    "limitations": "",
+    "future_work": "",
+    "strengths": [],
+    "weaknesses": [],
+    "keywords": [],
+    "important_findings": []
 }
 
 Rules:
 
-- Use only information from the abstract.
-- Do not hallucinate.
-- Leave missing fields empty.
-- Return valid JSON only.
+- Use only information present in the provided text.
+- Do not hallucinate. Never invent datasets, metrics, or numerical results.
+- Leave a field empty (empty string or empty list) when the text does not
+  support it. An empty field is correct; a guessed field is not.
+- Report results quantitatively when numbers are given in the text.
+- "strengths" and "weaknesses" are your own assessment of the work, grounded
+  in what the text actually says.
+- "important_findings" are the specific takeaways a researcher citing this
+  paper would need.
+- Keep every string field concise: at most 3 sentences.
+- Return valid JSON only, with no markdown fences and no commentary.
 """
 
 MANUSCRIPT_ACTION_PROMPT = """
@@ -590,4 +605,60 @@ Return ONLY JSON in the following format:
     "manuscript_revision": ""
 }}
 """
+
+
+# ==========================================================
+# Reviewer Response Patterns
+# ==========================================================
+
+REVIEWER_RESPONSE_PATTERNS = {
+
+    "new_experiment": """
+When the reviewer requests additional experiments or evaluation:
+
+- Thank the reviewer.
+- Acknowledge the importance of the suggestion.
+- If the experiments have been performed, summarize them with quantitative results.
+- Explain how the manuscript has been updated.
+- If the experiments have not been performed, recommend conducting them rather than fabricating results.
+""",
+
+    "clarification": """
+When the reviewer questions novelty or misunderstands the contribution:
+
+- Thank the reviewer.
+- Politely clarify the misunderstanding.
+- Explain the intended contribution.
+- Differentiate the work from prior literature.
+- Mention any manuscript revisions that improve clarity.
+""",
+
+    "experimental_design": """
+When the reviewer questions datasets, validation protocols or evaluation methodology:
+
+- Thank the reviewer.
+- Explain the rationale behind the adopted methodology.
+- Support the explanation using literature or accepted practice.
+- Mention additional analyses if available.
+- Clarify the manuscript where necessary.
+""",
+    "future_work": """
+When the reviewer requests work outside the scope of the current paper:
+
+- Thank the reviewer.
+- Acknowledge the suggestion.
+- Explain why it is outside the scope of the present study.
+- Discuss expected behavior if appropriate.
+- Mention it as future work.
+""",
+
+    "writing_revision": """
+When the reviewer requests improvements in writing or presentation:
+
+- Thank the reviewer.
+- Accept the suggestion.
+- Explain what has been revised.
+- Mention where the manuscript has been updated.
+"""
+}
 

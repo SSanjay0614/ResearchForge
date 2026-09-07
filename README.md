@@ -50,6 +50,7 @@ The system supports both **automated agent selection** and **direct agent execut
 - Retrieve citation metadata
 - Find references supporting specific research claims
 - Iteratively refine searches when supporting evidence is insufficient
+- Citation verification using DOI
 
 ### 📝 Reviewer Response
 - Interpret reviewer comments

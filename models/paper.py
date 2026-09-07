@@ -14,8 +14,9 @@ class Paper(BaseModel):
         default_factory=PaperAnalysis
     )
 
-    # Verdict from the relevance check. Irrelevant papers are still kept in
-    # the project library, they just are not analyzed.
+    # Verdict from the relevance check. Off-topic papers are dropped before
+    # they reach the library unless DROP_IRRELEVANT_PAPERS is turned off, in
+    # which case they are kept with this set to False and simply not analyzed.
 
     is_relevant: bool = True
 

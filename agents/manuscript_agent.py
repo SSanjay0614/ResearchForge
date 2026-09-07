@@ -15,6 +15,7 @@ from models.chat_message import ChatMessage
 from models.workflow_event import WorkflowEvent
 
 from utils.parser import parse_json
+from utils.citation_keys import audit_citations
 
 MAX_GENERATION_ITERATIONS = 2
 
@@ -301,11 +302,65 @@ class ManuscriptAgent(BaseAgent):
 
         data["response"] = latex
 
+        # A fabricated citation key is easy to miss inside a wall of LaTeX, so
+        # the warning rides along with the response the user actually reads.
+        audit = data.get("citation_audit") or {}
+
+        if audit.get("unknown_keys"):
+
+            data["response"] = "%s\n\n⚠️ %s" % (
+                latex,
+                audit.get("message", "")
+            )
+
         state.manuscript.latex_source = self._build_latex_source(
             state
         )
 
         return state
+
+    def _audit_generated_citations(
+        self,
+        state: ProjectState,
+        latex: str
+    ) -> dict:
+        """Check the draft's \\cite keys against the project bibliography.
+
+        The model writes citation keys as part of the LaTeX, and nothing
+        constrains it to keys that exist. An unmatched key is a fabricated
+        reference, so it is reported rather than left to be discovered at
+        compile time or, worse, at review.
+        """
+
+        audit = audit_citations(
+            latex,
+            state.citations
+        )
+
+        if audit["unknown_keys"]:
+
+            audit["message"] = (
+                "%d citation key(s) in this section are not in the project "
+                "bibliography and may be fabricated: %s. Run the citation "
+                "agent to find real sources, or remove them."
+                % (
+                    len(audit["unknown_keys"]),
+                    ", ".join(audit["unknown_keys"])
+                )
+            )
+
+        elif audit["cited_keys"]:
+
+            audit["message"] = (
+                "All %d citation key(s) resolve to the project bibliography."
+                % len(audit["cited_keys"])
+            )
+
+        else:
+
+            audit["message"] = ""
+
+        return audit
 
     def run(
         self,
@@ -360,6 +415,20 @@ class ManuscriptAgent(BaseAgent):
                     data = revised_data
             except Exception as e:
                 self.logger.warning(f"Revision pass failed: {e}")
+
+        audit = self._audit_generated_citations(
+            state,
+            data.get("latex", "")
+        )
+
+        data["citation_audit"] = audit
+
+        if audit["unknown_keys"]:
+
+            self.logger.warning(
+                "manuscript cites %d key(s) not in the bibliography: %s"
+                % (len(audit["unknown_keys"]), ", ".join(audit["unknown_keys"]))
+            )
 
         state = self._update_state(
             state,

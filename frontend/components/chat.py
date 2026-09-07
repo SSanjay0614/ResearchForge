@@ -2,6 +2,7 @@ import os
 import sys
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if PROJECT_ROOT not in sys.path:
@@ -9,6 +10,7 @@ if PROJECT_ROOT not in sys.path:
 
 from frontend.utils.session import get_state, run_graph, set_state, run_selected_agent, save_current_project, set_pending_checkpoint
 from frontend.components.project import render_pre_manuscript_info
+from frontend.components.citations import STATUS_BADGES, render_verification
 from workflow.router import WorkflowRouter
 
 
@@ -23,6 +25,64 @@ AGENT_NAME_MAP = {
     "citation": "Citation Agent",
     "reviewer": "Reviewer Agent",
 }
+
+
+def _citation_field(citation, field: str, default=None):
+    """Citations arrive as models from a live run, dicts from a saved project."""
+
+    if isinstance(citation, dict):
+        return citation.get(field) or default
+
+    return getattr(citation, field, None) or default
+
+
+def _verification_of(citation):
+    return _citation_field(citation, "verification")
+
+
+def _verification_status(citation) -> str:
+    verification = _verification_of(citation)
+
+    if verification is None:
+        return "unverified"
+
+    if isinstance(verification, dict):
+        return verification.get("status") or "unverified"
+
+    return getattr(verification, "status", "unverified") or "unverified"
+
+
+def _render_citation_warning(citations) -> None:
+    """Surface unverifiable citations in the chat, not just on the Citations tab.
+
+    A citation that looks fine here and is flagged two tabs away is a citation
+    that gets used, so the warning belongs next to the response that produced it.
+    """
+
+    if not citations:
+        return
+
+    problems = [
+        citation
+        for citation in citations
+        if _verification_status(citation) != "verified"
+    ]
+
+    if not problems:
+        st.success(f"All {len(citations)} citation(s) verified against the DOI registry.")
+        return
+
+    lines = []
+    for citation in problems:
+        status = _verification_status(citation)
+        icon, label, _ = STATUS_BADGES.get(status, STATUS_BADGES["unverified"])
+        title = _citation_field(citation, "title", "Untitled Citation")
+        lines.append(f"- {icon} **{title}** — {label.lower()}")
+
+    st.warning(
+        f"{len(problems)} of {len(citations)} citation(s) could not be confirmed. "
+        "Check these before using them:\n\n" + "\n".join(lines)
+    )
 
 
 def _render_structured_response(state) -> None:
@@ -84,17 +144,19 @@ def _render_structured_response(state) -> None:
             st.markdown(f"**{paper_index}.** {title}")
 
     if latest_output.get("citations"):
+        citations = latest_output.get("citations", [])
         st.markdown("##### 📌 Generated Citations")
-        for citation_index, citation in enumerate(latest_output.get("citations", []), start=1):
-            if isinstance(citation, dict):
-                title = citation.get("title") or "Untitled Citation"
-                bibtex = citation.get("bibtex") or "No BibTeX available"
-            else:
-                title = getattr(citation, "title", "Untitled Citation")
-                bibtex = getattr(citation, "bibtex", "No BibTeX available")
-                
-            with st.expander(f"📌 {citation_index}. {title}", expanded=False):
-                st.write(f"**BibTeX**")
+        _render_citation_warning(citations)
+
+        for citation_index, citation in enumerate(citations, start=1):
+            title = _citation_field(citation, "title", "Untitled Citation")
+            bibtex = _citation_field(citation, "bibtex", "No BibTeX available")
+            status = _verification_status(citation)
+            icon = STATUS_BADGES.get(status, STATUS_BADGES["unverified"])[0]
+
+            with st.expander(f"{icon} {citation_index}. {title}", expanded=status != "verified"):
+                render_verification(_verification_of(citation))
+                st.write("**BibTeX**")
                 st.code(bibtex, language="bibtex")
 
     if latest_output.get("manuscript_revision"):
@@ -108,27 +170,24 @@ def _render_chat_citations(output: dict, output_index: int) -> None:
         return
 
     st.markdown("##### 📌 Generated Citations")
-    for citation_index, citation in enumerate(citations, start=1):
-        if isinstance(citation, dict):
-            title = citation.get("title") or "Untitled Citation"
-            authors = citation.get("authors") or "Unknown"
-            year = citation.get("year") or "Unknown"
-            doi = citation.get("doi") or "Unknown"
-            venue = citation.get("venue") or "Unknown"
-            bibtex = citation.get("bibtex") or "No BibTeX available"
-        else:
-            title = getattr(citation, "title", "Untitled Citation")
-            authors = getattr(citation, "authors", None) or "Unknown"
-            year = getattr(citation, "year", None) or "Unknown"
-            doi = getattr(citation, "doi", None) or "Unknown"
-            venue = getattr(citation, "venue", None) or "Unknown"
-            bibtex = getattr(citation, "bibtex", None) or "No BibTeX available"
+    _render_citation_warning(citations)
 
-        with st.expander(f"📌 Citation {output_index + 1}.{citation_index}: {title}"):
+    for citation_index, citation in enumerate(citations, start=1):
+        title = _citation_field(citation, "title", "Untitled Citation")
+        authors = _citation_field(citation, "authors", "Unknown")
+        year = _citation_field(citation, "year", "Unknown")
+        doi = _citation_field(citation, "doi", "Unknown")
+        venue = _citation_field(citation, "venue", "Unknown")
+        bibtex = _citation_field(citation, "bibtex", "No BibTeX available")
+        status = _verification_status(citation)
+        icon = STATUS_BADGES.get(status, STATUS_BADGES["unverified"])[0]
+
+        with st.expander(f"{icon} Citation {output_index + 1}.{citation_index}: {title}"):
             st.write(f"**Authors:** {authors}")
             st.write(f"**Year:** {year}")
             st.write(f"**DOI:** {doi}")
             st.write(f"**Venue:** {venue}")
+            render_verification(_verification_of(citation))
             st.write("**BibTeX**")
             st.code(bibtex, language="bibtex")
 
@@ -139,12 +198,15 @@ def _normalize_agent_name(agent_name: str) -> str:
     return AGENT_NAME_MAP.get(agent_name.lower(), agent_name)
 
 
-def _get_display_agent_label(selected_mode: str, prompt: str) -> str:
+def _get_display_agent_label(selected_mode: str, prompt: str, state=None) -> str:
     if selected_mode == "Manual Agent Selection":
         return st.session_state.get("selected_manual_agent", "Planning Agent")
 
+    # State goes in so the router can honour preconditions. The graph routes
+    # again with the same input and state, and that call is served from the
+    # router's cache.
     try:
-        action = router.route(prompt)
+        action = router.route(prompt, state)
         if action and getattr(action, "agent", ""):
             return _normalize_agent_name(action.agent)
     except Exception:
@@ -220,11 +282,56 @@ def _render_checkpoint(state) -> None:
 
 
 def _render_scroll_controls(auto_scroll: bool = False) -> None:
-    html = f"""
+    html = """
     <div id="researchforge-chat-bottom"></div>
     <a id="researchforge-scroll-bottom" class="researchforge-scroll-bottom" href="#researchforge-chat-bottom" aria-label="Scroll to latest message" title="Scroll to latest message">↓</a>
     """
     st.markdown(html, unsafe_allow_html=True)
+
+    if not auto_scroll:
+        return
+
+    # A finished run reruns the script, which restores the previous scroll
+    # position -- usually somewhere above the response that just arrived. Jump
+    # to the end so the newest exchange is what the user sees.
+    #
+    # st.markdown cannot do this: Streamlit strips <script> from markdown HTML.
+    # components.html gets its own iframe, so the scroll has to be applied to
+    # window.parent, and the retries cover the gap before the new messages are
+    # laid out (the page height grows after the iframe first runs).
+    components.html(
+        """
+        <script>
+        (function () {
+            const doc = window.parent.document;
+            let attempts = 0;
+
+            function toBottom() {
+                attempts += 1;
+                const anchor = doc.getElementById("researchforge-chat-bottom");
+                if (anchor && anchor.scrollIntoView) {
+                    anchor.scrollIntoView({behavior: "smooth", block: "end"});
+                } else {
+                    // Streamlit renders the app inside a scrollable container in
+                    // some versions and scrolls the window in others.
+                    const main = doc.querySelector('section.main')
+                        || doc.querySelector('[data-testid="stAppViewContainer"]');
+                    if (main) {
+                        main.scrollTop = main.scrollHeight;
+                    }
+                    window.parent.scrollTo(0, doc.body.scrollHeight);
+                }
+                if (attempts < 6) {
+                    window.setTimeout(toBottom, 250);
+                }
+            }
+
+            window.setTimeout(toBottom, 120);
+        })();
+        </script>
+        """,
+        height=0
+    )
 
 
 def render_chat_page() -> None:
@@ -306,7 +413,7 @@ def render_chat_page() -> None:
         save_current_project(state)
 
         selected_mode = st.session_state.get("agent_mode", "Smart Router (Recommended)")
-        agent_label = forced_agent or _get_display_agent_label(selected_mode, prompt)
+        agent_label = forced_agent or _get_display_agent_label(selected_mode, prompt, state)
         if (
             agent_label == "Manuscript Agent"
             and not getattr(state, "pre_manuscript_completed", False)

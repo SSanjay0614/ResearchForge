@@ -21,15 +21,20 @@ from config.prompts import (
 )
 
 from config.settings import (
+    DROP_IRRELEVANT_PAPERS,
     ENABLE_FULL_TEXT_ANALYSIS,
     FULL_TEXT_MAX_CHARS,
+    MAX_ANALYZED_PAPERS,
+    MAX_RETRIEVED_PAPERS,
+    MAX_SEARCH_ITERATIONS,
     RELEVANCE_WORKERS,
+    TARGET_RELEVANT_PAPERS,
 )
 
-MAX_SEARCH_ITERATIONS = 3
-MAX_RETRIEVED_PAPERS = 5
-TARGET_RELEVANT_PAPERS = 5
-MAX_ANALYZED_PAPERS = 3
+DEPTH_LABELS = {
+    "full_text": " (full paper)",
+    "abstract": " (abstract only)"
+}
 
 ANALYSIS_FIELDS = [
     "contribution",
@@ -349,7 +354,10 @@ class LiteratureAgent(BaseAgent):
 
             candidates.sort(key=depth_tier)
 
-        targets = candidates[:budget]
+        # A budget already spent arrives here as zero or less. Slicing with a
+        # negative number would silently analyze all but the last few.
+
+        targets = candidates[:budget] if budget > 0 else []
 
         if not targets:
 
@@ -504,10 +512,43 @@ class LiteratureAgent(BaseAgent):
                 user_input
             )
 
-            # Irrelevant papers stay in the library, they simply do not get
-            # analyzed, so nothing found is ever thrown away.
+            if DROP_IRRELEVANT_PAPERS:
+
+                # Only relevant papers make it into the library. The off-topic
+                # ones are named in the log rather than vanishing silently, so
+                # a bad relevance verdict is still traceable.
+
+                rejected = [
+                    paper
+                    for paper in new_papers
+                    if not paper.is_relevant
+                ]
+
+                for paper in rejected:
+
+                    self.logger.info(
+                        "dropped as off-topic: %s (%s)"
+                        % (
+                            getattr(paper.metadata, "title", "") or "Untitled",
+                            paper.relevance_reason or "no reason given"
+                        )
+                    )
+
+                new_papers = [
+                    paper
+                    for paper in new_papers
+                    if paper.is_relevant
+                ]
 
             collected_papers.extend(new_papers)
+
+            # Stop at the target rather than letting a generous iteration
+            # overshoot it: every kept paper gets a full analysis, so an extra
+            # paper is an extra PDF download and an extra long LLM call.
+
+            if len(collected_papers) > TARGET_RELEVANT_PAPERS:
+
+                collected_papers = collected_papers[:TARGET_RELEVANT_PAPERS]
 
             state.papers = collected_papers
 
@@ -518,7 +559,7 @@ class LiteratureAgent(BaseAgent):
             )
 
             self.logger.info(
-                "iteration %d: %d new papers, %d relevant overall"
+                "iteration %d: %d new papers kept, %d relevant overall"
                 % (iteration, len(new_papers), relevant_count)
             )
 
@@ -526,7 +567,10 @@ class LiteratureAgent(BaseAgent):
                 break
 
             if iteration < MAX_SEARCH_ITERATIONS:
-                self.logger.info("insufficient relevant papers")
+                self.logger.info(
+                    "insufficient relevant papers (%d of %d); reformulating"
+                    % (relevant_count, TARGET_RELEVANT_PAPERS)
+                )
                 current_query = self._reformulate_query(
                     state,
                     current_query,
@@ -552,16 +596,19 @@ class LiteratureAgent(BaseAgent):
         data = {
 
             "response": (
-                "I found %d papers (%d judged relevant) and analyzed %d in depth.\n\n"
-                % (len(state.papers), relevant_total, analyzed_papers)
-                + "Papers found:\n"
+                "I kept %d relevant papers and analyzed %d of them.\n\n"
+                % (relevant_total, analyzed_papers)
+                + "Papers:\n"
                 + "\n".join(
                     "- %s%s"
                     % (
                         paper.metadata.title or "Untitled Paper",
-                        ""
-                        if paper.is_relevant
-                        else " (not relevant to this topic)"
+                        DEPTH_LABELS.get(
+                            getattr(paper, "analysis_depth", ""),
+                            ""
+                            if paper.is_relevant
+                            else " (not relevant to this topic)"
+                        )
                     )
                     for paper in state.papers
                 )

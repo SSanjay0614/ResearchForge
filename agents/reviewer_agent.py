@@ -3,6 +3,7 @@ from agents.base_agent import BaseAgent
 from memory.state import ProjectState
 
 from models.reviewer_action import ReviewerAction
+from models.reviewer_comment import ReviewerComment
 from models.chat_message import ChatMessage
 from models.workflow_event import WorkflowEvent
 
@@ -214,11 +215,46 @@ Reviewer Comment
 
         state.status = "review"
 
+        comment = (data.get("reviewer_comment", "") or "").strip()
+
+        response = data.get("response", "")
+
         state.reviewer_response = {
-            "reviewer_comment": data.get("reviewer_comment", ""),
-            "response": data.get("response", ""),
+            "reviewer_comment": comment,
+            "response": response,
             "manuscript_revision": data.get("manuscript_revision", ""),
         }
+
+        # Record the comment on the state as well. Without this, the project
+        # never accumulates reviewer comments, so the router's state signature
+        # always reports zero of them and the LLM reads that as an unmet
+        # precondition for the reviewer agent.
+        if comment:
+
+            existing = next(
+                (
+                    item
+                    for item in state.reviewer_comments
+                    if item.comment == comment
+                ),
+                None
+            )
+
+            if existing is None:
+
+                state.reviewer_comments.append(
+                    ReviewerComment(
+                        comment=comment,
+                        response=response,
+                        addressed=bool(response)
+                    )
+                )
+
+            else:
+
+                existing.response = response
+
+                existing.addressed = bool(response)
 
         return state
 

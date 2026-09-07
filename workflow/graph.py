@@ -69,7 +69,8 @@ def route(
 ):
 
     action = router.route(
-        state.user_input
+        state.user_input,
+        state
     )
 
     return action.agent
